@@ -593,7 +593,7 @@ class TransformerConnectionHandler(ConnectionHandler):
         else:
             friendly_uids = "n/a"
 
-        friendly_remote_id = "..." + str(context.remote_id)[-6:]
+        friendly_remote_id = "…" + str(context.remote_id)[-6:]
 
         message = f"{method}(blocks={friendly_uids}, remote_peer={friendly_remote_id})"
         if warning is not None:
