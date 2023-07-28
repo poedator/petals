@@ -19,7 +19,7 @@ from petals.utils.misc import DUMMY, is_dummy
 
 logger = get_logger(__name__)
 
-MAX_TOKENS_IN_BATCH = 1024
+MAX_TOKENS_IN_BATCH = 16384
 
 
 async def sequential_forward(
