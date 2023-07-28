@@ -681,7 +681,7 @@ class ModuleAnnouncerThread(threading.Thread):
             if self.server_info.state != ServerState.OFFLINE:
                 self._ping_next_servers()
                 self.server_info.next_pings = {
-                    peer_id.to_base58(): rtt for peer_id, rtt in self.ping_aggregator.to_dict().items()
+                    "…" + peer_id.to_base58()[-6:]: round(rtt, 4) for peer_id, rtt in self.ping_aggregator.to_dict().items()
                 }
             else:
                 self.server_info.next_pings = None  # No need to ping if we're disconnecting
