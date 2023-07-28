@@ -165,7 +165,7 @@ def measure_network_rps(
         return network_rps
     except RuntimeError as e:
         logger.info(f"Network throughput is not available: {e}. Using default of {default_speed / 1e6:.2f} Mbit/s")
-        return default_speed / bits_per_request
+        return round(default_speed / bits_per_request, 1)
 
 
 def _measure_bits_per_second(pipe_send: mp.Pipe):
@@ -217,7 +217,7 @@ def measure_compute_rps(
         f"{'Inference' if inference else 'Forward pass'} throughput: {device_rps:.1f} tokens/sec per block "
         f"({n_tokens} tokens/batch, {devices_repr}, {get_dtype_name(dtype, quant_type)})"
     )
-    return device_rps
+    return round(device_rps, 1)
 
 
 def get_device_name(device: torch.device) -> str:
