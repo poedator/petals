@@ -427,6 +427,7 @@ class TransformerConnectionHandler(ConnectionHandler):
             uid_str, flat_inputs, metadata = await self._gather_inputs(requests, context)
             requested_uids = self._check_uids(uid_str)
             self._log_request("rpc_forward_stream", requested_uids, context)
+            self._log_request("rpc_forward_stream", requested_uids, context, debug=f"metadata keys: {metadata.keys()}")
 
             requested_backends = tuple(self.module_backends[uid] for uid in requested_uids)
             active_adapter = self._get_active_adapter(metadata)
@@ -638,36 +639,48 @@ async def _rpc_forward(
     :param requested_backends: a sequence of transformer blocks in the same order as they appear in forward pass
     :returns: hidden states after the last layer [batch_size, seq_length, hid_size]
     """
-    hidden_states, prompts = flat_tensors
-    dtype = requested_backends[0].dtype
-    # check parse input tensors and cast dtypes
-    hidden_states = hidden_states.to(dtype)
-    assert hidden_states.ndim == 3
-    if prompts is None or is_dummy(prompts):
-        prompts = [DUMMY] * len(requested_backends)
-    else:
-        prompts = [p.squeeze(0) for p in prompts.to(requested_backends[0].dtype).split(1, dim=0)]
+    try:
+        hidden_states, prompts = flat_tensors
+        dtype = requested_backends[0].dtype
+        # check parse input tensors and cast dtypes
+        hidden_states = hidden_states.to(dtype)
+        assert hidden_states.ndim == 3
+        if prompts is None or is_dummy(prompts):
+            prompts = [DUMMY] * len(requested_backends)
+        else:
+            prompts = [p.squeeze(0) for p in prompts.to(requested_backends[0].dtype).split(1, dim=0)]
 
-    # Run a chain of requested backends
-    for backend, prompt in zip(requested_backends, prompts):
-        if not is_dummy(prompt):
-            hidden_states[:, : prompt.shape[1]] += prompt
+        # Run a chain of requested backends
+        for backend, prompt in zip(requested_backends, prompts):
+            if not is_dummy(prompt):
+                hidden_states[:, : prompt.shape[1]] += prompt
 
-        assert isinstance(backend.inference_pool, PrioritizedTaskPool), "petals support only prioritized pools"
-        priority = prioritizer.prioritize(
-            hidden_states, points=points / len(requested_backends), backend=backend, type="forward"
-        )
-        (hidden_states,) = await backend.forward_pool.submit_task(
-            hidden_states,
-            active_adapter,
-            priority=priority,
-        )
-        assert isinstance(hidden_states, torch.Tensor)
-        assert (
-            hidden_states.ndim == 3
-        ), f"inputs to {type(backend)} must be a list with a single 3d tensor of hidden states"
+            assert isinstance(backend.inference_pool, PrioritizedTaskPool), "petals support only prioritized pools"
+            priority = prioritizer.prioritize(
+                hidden_states, points=points / len(requested_backends), backend=backend, type="forward"
+            )
+            logger.info(f"[XX_] rpc_fwd")
+            task_ =  backend.forward_pool.submit_task(
+                hidden_states,
+                active_adapter,
+                priority=priority,
+            )
+            print("TASK", type(task), task_)
+            (hidden_states,) = await task_
 
-    return hidden_states
+            # (hidden_states,) = await backend.forward_pool.submit_task(
+            #     hidden_states,
+            #     active_adapter,
+            #     priority=priority,
+            # )
+            assert isinstance(hidden_states, torch.Tensor)
+            assert (
+                hidden_states.ndim == 3
+            ), f"inputs to {type(backend)} must be a list with a single 3d tensor of hidden states"
+            logger.info(f"[XX_] rpc_fwd_done")
+        return hidden_states
+    except BaseException as e:
+        print(type(e), repr(e), flush=True)
 
 
 async def _rpc_backward(

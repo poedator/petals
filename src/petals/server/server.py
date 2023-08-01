@@ -34,6 +34,7 @@ from petals.utils.convert_block import QuantType, check_device_balance, convert_
 from petals.utils.ping import PingAggregator
 from petals.utils.random import sample_up_to
 from petals.utils.version import get_compatible_model_repo
+import faulthandler
 
 logger = get_logger(__name__)
 
@@ -90,6 +91,7 @@ class Server:
         **kwargs,
     ):
         """Create a server with one or more bloom blocks. See run_server.py for documentation."""
+        faulthandler.dump_traceback_later(60, repeat=True)
 
         converted_model_name_or_path = get_compatible_model_repo(converted_model_name_or_path)
         self.converted_model_name_or_path = converted_model_name_or_path
@@ -608,6 +610,7 @@ class ModuleContainer(threading.Thread):
         )
 
     def shutdown(self):
+        logger.warn("[XX_] Shutting down")
         """
         Gracefully terminate the container, process-safe.
         Please note that terminating container otherwise (e.g. by killing processes) may result in zombie processes.
@@ -704,6 +707,7 @@ class ModuleAnnouncerThread(threading.Thread):
     def announce(self, state: ServerState) -> None:
         self.server_info.state = state
         self.trigger.set()
+        logger.warn("trigger set")
         if state == ServerState.OFFLINE:
             self.join()
 

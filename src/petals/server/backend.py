@@ -17,6 +17,7 @@ from petals.data_structures import InferenceMetadata
 from petals.server.memory_cache import MemoryCache
 from petals.server.task_pool import PrioritizedTaskPool
 from petals.utils.misc import is_dummy
+import time 
 
 logger = get_logger(__name__)
 
@@ -97,9 +98,17 @@ class TransformerBackend(ModuleBackend):
         return cache_tensors
 
     def forward(self, *inputs: Union[torch.Tensor, str]) -> Tuple[torch.Tensor, ...]:
-        *inputs, active_adapter = inputs
-        with self._peft_module.using_adapter(active_adapter):
-            return super().forward(*inputs)
+        try:
+            logger.info(f"[XX_] forward triggered")
+            *inputs, active_adapter = inputs
+            with self._peft_module.using_adapter(active_adapter):
+                start = time.perf_counter()
+                result = super().forward(*inputs)
+                torch.cuda.synchronize()
+                logger.debug(f"fwd time {time.perf_counter() - start:.6}")
+                return result
+        except BaseException as e:
+            print(type(e), repr(e), flush=True)
 
     def backward(self, *inputs: Union[torch.Tensor, str]) -> Tuple[torch.Tensor, ...]:
         *inputs, active_adapter = inputs
@@ -129,6 +138,7 @@ class TransformerBackend(ModuleBackend):
             layer_past = self._select_layer_past(cache_tensors, inference_info.prefix_length)
             for offset in range(0, seq_len, max_chunk_length):
                 hidden_states_chunk = hidden_states[:, offset : offset + max_chunk_length, :]
+                logger.info(f"[MaxChunk] {offset=} hsc_shape={hidden_states_chunk.shape}")
                 output_hidden_states_chunk, new_kvs = self.module.forward(
                     hidden_states_chunk, layer_past=layer_past, use_cache=True
                 )
@@ -147,6 +157,7 @@ class TransformerBackend(ModuleBackend):
         batch_size, seq_length, hidden_size = hidden_states.shape
         worst_case_length = inference_info.prefix_length + seq_length
         attn_bytes_per_token = max(self.shard_num_heads) * batch_size * self.dtype_bytes * worst_case_length
+        logger.info(f"[MaxChunk] {hidden_states.shape=} resulf = {max(1, self.max_chunk_size_bytes // attn_bytes_per_token)}")
         return max(1, self.max_chunk_size_bytes // attn_bytes_per_token)
 
     def _reorder_cache_inplace(self, cache_tensors: torch.Tensor, hypo_ids: torch.Tensor):

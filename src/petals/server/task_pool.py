@@ -113,6 +113,7 @@ class PrioritizedTaskPool(TaskPoolBase):
 
         task = Task(priority, time.monotonic(), future, args)
         if self.get_task_size(task) > self.max_batch_size:
+            print(f"XX_ {self.get_task_size(task)=}")
             exc = ValueError(f"Task size greater than max_batch_size ({self.max_batch_size}), it can't be processed")
             task.future.set_exception(exc)
         else:
@@ -132,6 +133,7 @@ class PrioritizedTaskPool(TaskPoolBase):
         self, timeout: Optional[float] = None, device: Optional[torch.device] = None
     ) -> Tuple[Any, List[torch.Tensor]]:
         """receive next batch of arrays"""
+        logger.debug("load_batch_to_runtime 0")
         device = device if device is not None else self.device
         task = self._ordered_tasks.get(block=True, timeout=timeout)
         batch_inputs = [_move_to_device_if_tensor(arg, device, share_memory=False) for arg in task.args]
@@ -140,6 +142,7 @@ class PrioritizedTaskPool(TaskPoolBase):
         if not self._ordered_tasks.empty():
             first_remaining_task: Task = self._ordered_tasks.queue[0]
             self.priority = (first_remaining_task.priority, first_remaining_task.time_submitted)
+        logger.debug("load_batch_to_runtime 1")
         return task.uid, batch_inputs
 
     def send_outputs_from_runtime(self, uid: int, batch_outputs: List[torch.Tensor]):
