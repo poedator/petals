@@ -41,6 +41,7 @@ class DistributedBloomModel(FromPretrainedMixin, PTuneMixin, BloomModel):
         input_ids: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
+        past_key_values = None, 
         **kwargs,
     ):
         assert attention_mask is None, f"{self.__class__.__name__} does not support attention masks right now"
@@ -84,7 +85,7 @@ class DistributedBloomModel(FromPretrainedMixin, PTuneMixin, BloomModel):
         hidden_states = hidden_states.view(output_shape)
         return BaseModelOutputWithPastAndCrossAttentions(
             last_hidden_state=hidden_states,
-            past_key_values=None,
+            past_key_values=past_key_values,
             hidden_states=None,
             attentions=None,
         )
